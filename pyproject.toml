@@ -3,4 +3,24 @@ name = "deeplearning"
 version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "albumentations>=2.0.8",
+    "black>=25.11.0",
+    "d2l>=0.17.0",
+    "flake8>=7.3.0",
+    "imgaug>=0.4.0",
+    "ipython>=9.8.0",
+    "jupyter>=1.1.1",
+    "matplotlib>=3.10.7",
+    "numpy>=2.3.5",
+    "opencv-python>=4.11.0.86",
+    "pandas>=2.3.3",
+    "pillow>=12.0.0",
+    "pre-commit>=4.5.0",
+    "scikit-learn>=1.7.2",
+    "seaborn>=0.13.2",
+    "torch>=2.9.1",
+    "torchaudio>=2.9.1",
+    "torchvision>=0.24.1",
+    "tqdm>=4.67.1",
+]
