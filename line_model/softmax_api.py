@@ -22,5 +22,5 @@ if __name__ == '__main__':
 
     trainer = torch.optim.SGD(net.parameters(), lr = 0.05)
 
-    tp.train_model(net,train_iter,test_iter,loss,trainer,show_plot = False)
+    tp.train_model(net,train_iter,test_iter,loss,trainer)
     tp.predict(net,test_iter,6)

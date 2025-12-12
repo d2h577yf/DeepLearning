@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-import matplotlib.pyplot as plt
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Dict, Union, Callable
+import time
 import numpy as np
 
 
@@ -27,74 +27,118 @@ class Accumulator:
         return self.data[idx]
 
 
-class TrainingMonitor:
-    """训练过程监控器，用于可视化训练指标"""
+class ConsoleMonitor:
+    """终端训练监控器，用于在终端显示训练进度和指标"""
 
-    def __init__(self, figsize = (10, 4)):
-        self.fig, (self.ax1, self.ax2) = plt.subplots(1, 2, figsize = figsize)
-        self.train_losses = []
-        self.train_accs = []
-        self.test_accs = []
-        self.epochs = []
+    def __init__(self, num_epochs: int, show_progress_bar: bool = True):
+        self.num_epochs = num_epochs
+        self.show_progress_bar = show_progress_bar
+        self.start_time = time.time()
+        self.best_test_acc = 0.0
+        self.best_epoch = 0
 
-        # 设置子图
-        self.ax1.set_xlabel('Epoch')
-        self.ax1.set_ylabel('Loss')
-        self.ax1.set_title('Training Loss')
+    def print_header(self):
+        """打印表头"""
+        print(f"{'Epoch':<10} {'Train Loss':<15} {'Train Acc':<15} {'Test Acc':<15} {'Time':<15}")
+        print("-" * 70)
 
-        self.ax2.set_xlabel('Epoch')
-        self.ax2.set_ylabel('Accuracy')
-        self.ax2.set_title('Training & Test Accuracy')
-        self.ax2.set_ylim(0, 1)
+    def print_epoch(self, epoch: int, train_loss: float, train_acc: float, test_acc: float):
+        """打印每个epoch的结果"""
+        epoch_time = time.time() - self.start_time
 
-        plt.ion()  # 开启交互模式
+        # 更新最佳准确率
+        if test_acc > self.best_test_acc:
+            self.best_test_acc = test_acc
+            self.best_epoch = epoch
 
-    def update(self, epoch: int, train_loss: float, train_acc: float, test_acc: Optional[float] = None):
-        """更新监控器"""
-        self.epochs.append(epoch)
-        self.train_losses.append(train_loss)
-        self.train_accs.append(train_acc)
+        print(f"{epoch:<10} {train_loss:<15.4f} {train_acc:<15.4f} {test_acc:<15.4f} {epoch_time:<15.2f}s")
 
-        if test_acc is not None:
-            self.test_accs.append(test_acc)
+        # 显示进度条（可选）
+        if self.show_progress_bar and epoch > 0:
+            self._print_progress_bar(epoch)
 
-        # 清除并重绘
-        self.ax1.clear()
-        self.ax2.clear()
+    def _print_progress_bar(self, epoch: int):
+        """显示训练进度条"""
+        progress = int((epoch / self.num_epochs) * 40)
+        bar = "[" + "=" * progress + ">" + " " * (40 - progress) + "]"
+        percent = (epoch / self.num_epochs) * 100
+        print(f"进度: {bar} {percent:.1f}% ({epoch}/{self.num_epochs})")
 
-        # 绘制损失
-        self.ax1.plot(self.epochs, self.train_losses, 'b-', label = 'Train Loss')
-        self.ax1.set_xlabel('Epoch')
-        self.ax1.set_ylabel('Loss')
-        self.ax1.set_title('Training Loss')
-        self.ax1.legend()
-        self.ax1.grid(True, alpha = 0.3)
+    def print_summary(self, history: Dict):
+        """打印训练总结"""
+        print("\n" + "=" * 70)
+        print("训练完成!")
+        print(f"总训练时间: {time.time() - self.start_time:.2f}秒")
+        print(f"最佳测试准确率: {self.best_test_acc:.4f} (第{self.best_epoch}个epoch)")
 
-        # 绘制准确率
-        self.ax2.plot(self.epochs, self.train_accs, 'g-', label = 'Train Acc')
-        if self.test_accs:
-            self.ax2.plot(self.epochs, self.test_accs, 'r-', label = 'Test Acc')
-        self.ax2.set_xlabel('Epoch')
-        self.ax2.set_ylabel('Accuracy')
-        self.ax2.set_title('Accuracy Curves')
-        self.ax2.set_ylim(0, 1)
-        self.ax2.legend()
-        self.ax2.grid(True, alpha = 0.3)
+        # 打印最终结果
+        print(f"\n最终结果:")
+        print(f"训练损失: {history['train_loss'][-1]:.4f}")
+        print(f"训练准确率: {history['train_acc'][-1]:.4f}")
+        print(f"测试准确率: {history['test_acc'][-1]:.4f}")
 
-        self.fig.tight_layout()
-        plt.draw()
-        plt.pause(0.1)
+        # 打印改进情况
+        if len(history['train_acc']) > 1:
+            train_improvement = history['train_acc'][-1] - history['train_acc'][0]
+            test_improvement = history['test_acc'][-1] - history['test_acc'][0]
+            print(f"\n改进情况:")
+            print(f"训练准确率提升: {train_improvement:+.4f}")
+            print(f"测试准确率提升: {test_improvement:+.4f}")
 
-    def save(self, filename: str = 'training_history.png'):
-        """保存训练历史图像"""
-        self.fig.savefig(filename, dpi = 300, bbox_inches = 'tight')
-        plt.ioff()
-        plt.show()
+            # 检查过拟合
+            train_test_gap = history['train_acc'][-1] - history['test_acc'][-1]
+            if train_test_gap > 0.15:  # 如果训练准确率比测试准确率高15%以上
+                print(f"⚠️  注意: 可能存在过拟合 (训练-测试差距: {train_test_gap:.4f})")
+            elif train_test_gap < -0.05:  # 如果测试准确率比训练准确率高5%以上
+                print(f"⚠️  注意: 可能存在欠拟合 (训练-测试差距: {train_test_gap:.4f})")
 
-    def close(self):
-        """关闭图像"""
-        plt.ioff()
-        plt.close()
+    def print_checkpoint_saved(self, save_path: str):
+        """打印模型保存信息"""
+        print(f"💾 模型已保存到: {save_path}")
+
+
+# ==================== 模型类型检测 ====================
+
+def is_functional_model(model) -> bool:
+    """
+    判断是否为函数式模型（函数 + 参数列表）
+
+    Args:
+        model: 模型对象
+
+    Returns:
+        bool: 是否为函数式模型
+    """
+    if isinstance(model, tuple) and len(model) == 2:
+        # 如果是(函数, 参数列表)的元组
+        return callable(model[0]) and isinstance(model[1], list)
+    elif callable(model):
+        # 如果是函数，检查是否有相关的全局参数
+        return True
+    else:
+        return False
+
+
+def prepare_functional_model(model, device: torch.device):
+    """
+    准备函数式模型进行训练
+
+    Args:
+        model: 函数式模型
+        device: 训练设备
+
+    Returns:
+        准备好训练的函数式模型
+    """
+    if isinstance(model, tuple):
+        # 模型是(函数, 参数列表)形式
+        forward_fn, params = model
+        # 将参数移动到设备
+        params = [param.to(device) for param in params]
+        return forward_fn, params
+    else:
+        # 模型是函数，需要在外部定义参数
+        return model
 
 
 # ==================== 核心函数 ====================
@@ -103,42 +147,74 @@ def accuracy(y_hat: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     """计算预测准确率"""
     if y_hat.dim() > 1 and y_hat.shape[1] > 1:
         # 多分类：取最大概率的类别
-        y_hat = y_hat.argmax(dim = 1)
+        y_hat = y_hat.argmax(dim=1)
     cmp = y_hat.type(y.dtype) == y
     return cmp.type(y.dtype).sum()
 
 
-def evaluate_accuracy(net: nn.Module, data_iter: DataLoader, device: torch.device = None) -> float:
+def evaluate_accuracy(model, data_iter: DataLoader,
+                      device: torch.device = None) -> float:
     """评估模型在数据集上的准确率"""
     if device is None:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    net.eval()
+    # 判断模型类型
+    is_functional = is_functional_model(model)
+
     metric = Accumulator(2)  # [正确数, 总数]
 
     with torch.no_grad():
         for X, y in data_iter:
             X, y = X.to(device), y.to(device)
-            y_hat = net(X)
+
+            # 根据模型类型进行前向传播
+            if is_functional:
+                if isinstance(model, tuple):
+                    forward_fn, params = model
+                    y_hat = forward_fn(X, *params)
+                else:
+                    # 函数式模型，直接调用
+                    y_hat = model(X)
+            elif isinstance(model, nn.Module):
+                model.eval()
+                y_hat = model(X)
+            else:
+                raise ValueError(f"不支持的模型类型: {type(model)}")
+
             metric.add(accuracy(y_hat, y), y.numel())
 
     return metric[0] / metric[1]
 
 
-def train_epoch(net: nn.Module, train_iter: DataLoader, loss_fn: nn.Module,
+def train_epoch(model, train_iter: DataLoader, loss_fn: nn.Module,
                 optimizer: torch.optim.Optimizer, device: torch.device = None) -> Tuple[float, float]:
     """训练一个epoch"""
     if device is None:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    net.train()
+    # 判断模型类型
+    is_functional = is_functional_model(model)
+
+    if isinstance(model, nn.Module):
+        model.train()
+
     metric = Accumulator(3)  # [总损失, 正确数, 样本数]
 
-    for X, y in train_iter:
+    for batch_idx, (X, y) in enumerate(train_iter):
         X, y = X.to(device), y.to(device)
 
         # 前向传播
-        y_hat = net(X)
+        if is_functional:
+            if isinstance(model, tuple):
+                forward_fn, params = model
+                y_hat = forward_fn(X, *params)
+            else:
+                y_hat = model(X)
+        elif isinstance(model, nn.Module):
+            y_hat = model(X)
+        else:
+            raise ValueError(f"不支持的模型类型: {type(model)}")
+
         loss = loss_fn(y_hat, y)
 
         # 反向传播
@@ -149,19 +225,26 @@ def train_epoch(net: nn.Module, train_iter: DataLoader, loss_fn: nn.Module,
         # 累积指标
         metric.add(loss.item() * y.size(0), accuracy(y_hat, y), y.size(0))
 
+        # 每10个batch打印一次进度
+        if batch_idx % 10 == 0 and batch_idx > 0:
+            avg_loss = metric[0] / metric[2]
+            avg_acc = metric[1] / metric[2]
+            print(f"  Batch {batch_idx}/{len(train_iter)} - Loss: {avg_loss:.4f}, Acc: {avg_acc:.4f}")
+
     # 返回平均损失和准确率
     return metric[0] / metric[2], metric[1] / metric[2]
 
 
-def train_model(net: nn.Module, train_iter: DataLoader, test_iter: DataLoader,
+def train_model(model, train_iter: DataLoader, test_iter: DataLoader,
                 loss_fn: nn.Module, optimizer: torch.optim.Optimizer,
                 num_epochs: int = 10, device: torch.device = None,
-                save_path: str = None, show_plot: bool = True) -> dict:
+                save_path: Optional[str] = None, show_progress_bar: bool = True,
+                validate_every: int = 1) -> Dict:
     """
     训练模型主函数
 
     Args:
-        net: 神经网络模型
+        model: 神经网络模型，可以是nn.Module、函数或(函数, 参数)元组
         train_iter: 训练数据迭代器
         test_iter: 测试数据迭代器
         loss_fn: 损失函数
@@ -169,7 +252,8 @@ def train_model(net: nn.Module, train_iter: DataLoader, test_iter: DataLoader,
         num_epochs: 训练轮数
         device: 训练设备
         save_path: 模型保存路径
-        show_plot: 是否显示训练曲线
+        show_progress_bar: 是否显示进度条
+        validate_every: 每隔多少个epoch验证一次
 
     Returns:
         dict: 包含训练历史的字典
@@ -177,69 +261,121 @@ def train_model(net: nn.Module, train_iter: DataLoader, test_iter: DataLoader,
     if device is None:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    net = net.to(device)
-    history = {'train_loss': [], 'train_acc': [], 'test_acc': []}
+    # 判断模型类型
+    is_functional = is_functional_model(model)
+    is_module = isinstance(model, nn.Module)
 
-    if show_plot:
-        monitor = TrainingMonitor()
+    if is_functional:
+        print("🎯 检测到函数式模型")
+        if isinstance(model, tuple):
+            forward_fn, params = model
+            params = [param.to(device) for param in params]
+            model = (forward_fn, params)
+    elif is_module:
+        print("🧠 检测到标准nn.Module模型")
+        model = model.to(device)
+    else:
+        raise ValueError(f"不支持的模型类型: {type(model)}")
 
-    print(f"开始训练，使用设备: {device}")
-    print(f"{'Epoch':<10} {'Train Loss':<15} {'Train Acc':<15} {'Test Acc':<15}")
-    print("-" * 60)
+    history = {'train_loss': [], 'train_acc': [], 'test_acc': [], 'epoch_times': []}
+
+    # 初始化控制台监控器
+    monitor = ConsoleMonitor(num_epochs, show_progress_bar)
+
+    print(f"🚀 开始训练，使用设备: {device}")
+    print(f"📊 总epoch数: {num_epochs}, 批量大小: {train_iter.batch_size}")
+    monitor.print_header()
 
     for epoch in range(1, num_epochs + 1):
-        # 训练一个epoch
-        train_loss, train_acc = train_epoch(net, train_iter, loss_fn, optimizer, device)
+        epoch_start_time = time.time()
 
-        # 评估测试集
-        test_acc = evaluate_accuracy(net, test_iter, device)
+        # 训练一个epoch
+        train_loss, train_acc = train_epoch(model, train_iter, loss_fn, optimizer, device)
+
+        # 记录epoch时间
+        epoch_time = time.time() - epoch_start_time
+        history['epoch_times'].append(epoch_time)
+
+        # 每隔validate_every个epoch评估一次测试集
+        if epoch % validate_every == 0 or epoch == num_epochs:
+            test_acc = evaluate_accuracy(model, test_iter, device)
+        else:
+            test_acc = history['test_acc'][-1] if history['test_acc'] else 0.0
 
         # 记录历史
         history['train_loss'].append(train_loss)
         history['train_acc'].append(train_acc)
         history['test_acc'].append(test_acc)
 
-        # 打印进度
-        print(f"{epoch:<10} {train_loss:<15.4f} {train_acc:<15.4f} {test_acc:<15.4f}")
+        # 打印epoch结果
+        monitor.print_epoch(epoch, train_loss, train_acc, test_acc)
 
-        # 更新监控器
-        if show_plot:
-            monitor.update(epoch, train_loss, train_acc, test_acc)
+        # 保存模型检查点
+        if save_path and epoch % 5 == 0:
+            checkpoint_path = f"{save_path}_epoch_{epoch}.pth"
+            # 根据模型类型保存
+            if is_module:
+                torch.save({
+                    'epoch': epoch,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'train_loss': train_loss,
+                    'train_acc': train_acc,
+                    'test_acc': test_acc
+                }, checkpoint_path)
+            else:
+                print(f"⚠️  函数式模型无法保存为标准的PyTorch模型格式，跳过保存")
 
-    # 保存模型
+            monitor.print_checkpoint_saved(checkpoint_path)
+
+    # 训练完成，打印总结
+    monitor.print_summary(history)
+
+    # 最终保存模型
     if save_path:
-        torch.save({
-            'model_state_dict': net.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            'history': history
-        }, save_path)
-        print(f"\n模型已保存到: {save_path}")
+        if is_module:
+            final_save_path = f"{save_path}_final.pth" if not save_path.endswith('.pth') else save_path
+            torch.save({
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'history': history,
+                'num_epochs': num_epochs,
+                'final_train_acc': history['train_acc'][-1],
+                'final_test_acc': history['test_acc'][-1]
+            }, final_save_path)
+            print(f"💾 最终模型已保存到: {final_save_path}")
+        else:
+            print("⚠️  函数式模型无法保存为标准的PyTorch模型格式")
+            print("   请手动保存模型参数")
 
-    # 保存训练图像
-    if show_plot:
-        monitor.save('training_history.png')
-        monitor.close()
-
-    print("\n训练完成!")
+    print("\n✅ 训练完成!")
     return history
 
 
-def predict(net: nn.Module, data_iter: DataLoader, num_samples: int = 6,
-            class_names: List[str] = None, device: torch.device = None):
+def predict(model, data_iter: DataLoader,
+            num_samples: int = 10, class_names: List[str] = None,
+            device: torch.device = None) -> Tuple[torch.Tensor, torch.Tensor]:
     """
-    对数据集进行预测并可视化结果
+    对数据集进行预测
 
     Args:
-        net: 训练好的模型
+        model: 训练好的模型
         data_iter: 数据迭代器
         num_samples: 显示的样本数量
         class_names: 类别名称列表
         device: 推理设备
+
+    Returns:
+        Tuple: (预测结果, 真实标签)
     """
     if device is None:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    net.eval()
+    # 判断模型类型
+    is_functional = is_functional_model(model)
+
+    if isinstance(model, nn.Module):
+        model.eval()
 
     # 获取一个batch的数据
     for X, y in data_iter:
@@ -249,8 +385,18 @@ def predict(net: nn.Module, data_iter: DataLoader, num_samples: int = 6,
 
     # 预测
     with torch.no_grad():
-        y_hat = net(X)
-        preds = y_hat.argmax(dim = 1)
+        if is_functional:
+            if isinstance(model, tuple):
+                forward_fn, params = model
+                y_hat = forward_fn(X, *params)
+            else:
+                y_hat = model(X)
+        elif isinstance(model, nn.Module):
+            y_hat = model(X)
+        else:
+            raise ValueError(f"不支持的模型类型: {type(model)}")
+
+        preds = y_hat.argmax(dim=1) if y_hat.dim() > 1 else y_hat
 
     # 限制显示数量
     num_samples = min(num_samples, X.size(0))
@@ -259,117 +405,67 @@ def predict(net: nn.Module, data_iter: DataLoader, num_samples: int = 6,
     if class_names is None:
         class_names = [str(i) for i in range(10)]
 
-    # 可视化预测结果
-    fig, axes = plt.subplots(1, num_samples, figsize = (3 * num_samples, 3))
-    if num_samples == 1:
-        axes = [axes]
+    # 打印预测结果
+    print(f"\n🔍 预测结果 (显示前{num_samples}个样本):")
+    print(f"{'样本':<10} {'预测':<15} {'真实':<15} {'状态':<15}")
+    print("-" * 55)
 
+    correct_count = 0
     for i in range(num_samples):
-        img = X[i].cpu().squeeze().numpy()
+        pred_label = preds[i].item()
+        true_label = y[i].item()
 
-        # 如果是单通道图像，确保正确的维度
-        if len(img.shape) == 3:
-            img = img[0]  # 取第一个通道
+        # 获取类别名称
+        pred_name = class_names[pred_label] if pred_label < len(class_names) else str(pred_label)
+        true_name = class_names[true_label] if true_label < len(class_names) else str(true_label)
 
-        axes[i].imshow(img, cmap = 'gray')
-        axes[i].set_title(f"True: {class_names[y[i].item()]}\nPred: {class_names[preds[i].item()]}")
+        is_correct = pred_label == true_label
+        status = "✅ 正确" if is_correct else "❌ 错误"
 
-        # 标记预测错误为红色
-        if y[i].item() != preds[i].item():
-            axes[i].title.set_color('red')
+        if is_correct:
+            correct_count += 1
 
-        axes[i].axis('off')
-
-    plt.tight_layout()
-    plt.show()
+        print(f"{i+1:<10} {pred_name:<15} {true_name:<15} {status:<15}")
 
     # 计算并显示batch准确率
-    correct = (preds == y).sum().item()
+    total_correct = (preds == y).sum().item()
     total = y.size(0)
-    print(f"当前batch准确率: {correct}/{total} ({correct / total:.2%})")
+    accuracy = total_correct / total
+
+    print(f"\n📊 当前batch统计:")
+    print(f"  样本总数: {total}")
+    print(f"  正确预测: {total_correct}")
+    print(f"  准确率: {accuracy:.2%}")
+    print(f"  显示样本正确率: {correct_count}/{num_samples} ({correct_count/num_samples:.2%})")
 
     return preds, y
 
 
-def load_and_predict(net: nn.Module, checkpoint_path: str, data_iter: DataLoader,
-                     class_names: List[str] = None, device: torch.device = None):
-    """
-    加载训练好的模型并进行预测
-    """
-    if device is None:
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+def print_model_info(model):
+    """打印模型信息"""
+    print("\n📋 模型信息:")
 
-    # 加载检查点
-    checkpoint = torch.load(checkpoint_path, map_location = device)
-    net.load_state_dict(checkpoint['model_state_dict'])
-    net.to(device)
+    is_functional = is_functional_model(model)
 
-    print(f"模型从 {checkpoint_path} 加载成功")
+    if is_functional:
+        print("  类型: 函数式模型")
+        if isinstance(model, tuple):
+            forward_fn, params = model
+            print(f"  参数数量: {len(params)}")
+            for i, param in enumerate(params):
+                print(f"    参数{i}: shape={param.shape}, dtype={param.dtype}, requires_grad={param.requires_grad}")
+    elif isinstance(model, nn.Module):
+        print("  类型: 标准nn.Module")
+        total_params = sum(p.numel() for p in model.parameters())
+        trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        print(f"  总参数数量: {total_params:,}")
+        print(f"  可训练参数: {trainable_params:,}")
+        print(f"  不可训练参数: {total_params - trainable_params:,}")
 
-    # 进行预测
-    return predict(net, data_iter, class_names = class_names, device = device)
-
-
-# ==================== 使用示例 ====================
-
-def example_usage():
-    """使用示例"""
-    import torchvision
-    import torchvision.transforms as transforms
-
-    # 1. 准备数据
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.5,), (0.5,))
-    ])
-
-    # 下载FashionMNIST数据集
-    train_dataset = torchvision.datasets.FashionMNIST(
-            root = '../data', train = True, download = True, transform = transform)
-    test_dataset = torchvision.datasets.FashionMNIST(
-            root = '../data', train = False, download = True, transform = transform)
-
-    train_loader = DataLoader(train_dataset, batch_size = 64, shuffle = True)
-    test_loader = DataLoader(test_dataset, batch_size = 64, shuffle = False)
-
-    # 2. 定义模型
-    class SimpleCNN(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.net = nn.Sequential(
-                    nn.Flatten(),
-                    nn.Linear(28 * 28, 256),
-                    nn.ReLU(),
-                    nn.Dropout(0.2),
-                    nn.Linear(256, 10)
-            )
-
-        def forward(self, x):
-            return self.net(x)
-
-    # 3. 初始化模型、损失函数、优化器
-    model = SimpleCNN()
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr = 0.001)
-
-    # 4. 训练模型
-    history = train_model(
-            net = model,
-            train_iter = train_loader,
-            test_iter = test_loader,
-            loss_fn = criterion,
-            optimizer = optimizer,
-            num_epochs = 10,
-            save_path = 'model.pth',
-            show_plot = True
-    )
-
-    # 5. 进行预测
-    # FashionMNIST类别名称
-    fashion_classes = ['T-shirt', 'Trouser', 'Pullover', 'Dress', 'Coat',
-                       'Sandal', 'Shirt', 'Sneaker', 'Bag', 'Ankle boot']
-
-    print("\n进行预测...")
-    predict(model, test_loader, num_samples = 8, class_names = fashion_classes)
-
-    return history
+        # 打印层信息
+        print("\n  层信息:")
+        for name, module in model.named_children():
+            num_params = sum(p.numel() for p in module.parameters())
+            print(f"    {name}: {module.__class__.__name__}, 参数: {num_params:,}")
+    else:
+        print(f"  类型: {type(model)}")
