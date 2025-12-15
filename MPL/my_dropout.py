@@ -1,7 +1,6 @@
 import torch
 from torch import nn
 from d2l import torch as d2l
-import my_train_predict as tp
 
 dropout1,dropout2 = 0.2,0.5
 
