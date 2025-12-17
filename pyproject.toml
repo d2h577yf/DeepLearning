@@ -1,6 +1,6 @@
 [project]
 name = "deeplearning"
-version = "0.1.0"
+version = "0.2.0"
 description = "Add your description here"
 requires-python = ">=3.13"
 dependencies = [
@@ -12,7 +12,7 @@ dependencies = [
     "imgaug>=0.4.0",
     "ipython>=9.8.0",
     "jupyter>=1.1.1",
-    "matplotlib>=3.10.7",
+    "matplotlib==3.10.8",
     "numpy>=2.3.5",
     "opencv-python>=4.11.0.86",
     "pandas>=2.3.3",
