@@ -26,9 +26,12 @@ def main() -> None:
     # print(pool2d_2(X))
     # pool2d_3 = nn.MaxPool2d((2, 3), stride = (2, 3), padding = (0, 1))
     # print(pool2d_3(X))
+    # X_stack = torch.cat((X, X + 1), 1)
+    # pool2d_4 = nn.MaxPool2d(3, padding = 1, stride = 2)
+    # print(pool2d_4(X_stack))
     X_stack = torch.cat((X, X + 1), 1)
-    pool2d_4 = nn.MaxPool2d(3, padding = 1, stride = 2)
-    print(pool2d_4(X_stack))
+    pool2d_5 = nn.AvgPool2d(3,padding = 1,stride = 2)
+    print(pool2d_5(X_stack))
 
 if __name__ == '__main__':
     main()
