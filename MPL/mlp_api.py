@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from d2l import torch as d2l
-import my_train_predict as tp
+import my_train_predict_deprecated as tp
 
 if __name__ == '__main__':
     net1 = nn.Sequential(nn.Flatten(), nn.Linear(784, 10))
