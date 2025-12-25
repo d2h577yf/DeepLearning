@@ -265,14 +265,15 @@ def test_model(model : nn.Module,
     accuracy = 100 * correct / total
     return accuracy, total, correct
 
-def main(is_original : bool = True):
+def main(model_choice : str = 'm'):
     batch_size : int = 64
     train_loader,test_loader = load_mnist(batch_size)
     
-    if is_original:
+    
+    if model_choice == 'o':
         print("原始模型:")
         model = MyLeNetOriginal()
-    else:
+    elif model_choice == 'm':
         print("现代模型:")
         model = MyLeNetModern()
         def init_weights(m):
@@ -281,6 +282,18 @@ def main(is_original : bool = True):
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
         model.apply(init_weights)
+    elif model_choice == 'd':
+        print("D2L中的模型:")
+        model = nn.Sequential(
+                nn.Conv2d(1,6,kernel_size = 5),nn.Sigmoid(),
+                nn.AvgPool2d(kernel_size = 2,stride = 2),
+                nn.Conv2d(6,16,kernel_size = 5),nn.Sigmoid(),
+                nn.AvgPool2d(kernel_size = 2, stride = 2),
+                nn.Flatten(),
+                nn.Linear(16 * 5 * 5, 120), nn.Sigmoid(),
+                nn.Linear(120, 84), nn.Sigmoid(),
+                nn.Linear(84, 10)
+        )
     
     start_time = time.time()
     train_losses, test_accuracies, best_accuracy = train_model(
@@ -299,4 +312,4 @@ def main(is_original : bool = True):
     print(f"正确数/总数: {correct}/{total}")
     
 if __name__ == '__main__':
-    main(True)
+    main('m')
