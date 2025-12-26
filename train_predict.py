@@ -9,7 +9,7 @@ def train_model(model: nn.Module,
                 test_loader: data.DataLoader,
                 lr: float,
                 epochs: int = 10,
-                device: str = 'cuda'):  # 新增device参数
+                device: str = 'cuda'):
     
     if device == 'cuda' and torch.cuda.is_available():
         device = torch.device('cuda')
@@ -55,6 +55,7 @@ def train_model(model: nn.Module,
             correct += (predicted == labels).sum().item()
             
             train_bar.set_postfix({
+                'epoch' : f'{epoch + 1}/{epochs}',
                 'loss': f'{loss.item():.4f}',
                 'acc': f'{100 * correct / total:.2f}%'
             })
@@ -84,14 +85,13 @@ def train_model(model: nn.Module,
         
         if test_accuracy > best_accuracy:
             best_accuracy = test_accuracy
-            best_model_state = model.state_dict().copy()
             torch.save({
                 'epoch': epoch,
-                'model_state_dict': best_model_state,
+                'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'loss': avg_train_loss,
                 'accuracy': best_accuracy,
-            }, 'best_lenet_model.pth')
+            }, 'best_model.pth')
             print(f"✅ 保存最佳模型，准确率: {best_accuracy:.2f}%")
         
         print(f"训练损失: {avg_train_loss:.4f}, 训练准确率: {train_accuracy:.2f}%")
@@ -111,6 +111,9 @@ def test_model(model: nn.Module,
         device = torch.device('cuda')
     else:
         device = torch.device('cpu')
+    
+    checkpoint = torch.load('best_model.pth')
+    model.load_state_dict(checkpoint['model_state_dict'])
     
     model = model.to(device)
     
