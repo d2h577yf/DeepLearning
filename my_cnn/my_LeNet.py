@@ -93,6 +93,7 @@ class MyLeNetOriginal(nn.Module):
         self.F6 = nn.Linear(120, 84)
         self.output = nn.Linear(84, 10)
         
+        self.sigmoid = nn.Sigmoid()
         self.A = 1.7159
         self.S = 2 / 3
     
@@ -100,11 +101,11 @@ class MyLeNetOriginal(nn.Module):
         return self.A * torch.tanh(self.S * x)
     
     def forward(self, x):
-        x = self.scaled_tanh(self.C1(x))
-        x = self.scaled_tanh(self.S2(x))
-        x = self.scaled_tanh(self.C3(x))
-        x = self.scaled_tanh(self.S4(x))
-        x = self.scaled_tanh(self.C5(x))  #
+        x = self.sigmoid(self.C1(x))
+        x = self.sigmoid(self.S2(x))
+        x = self.sigmoid(self.C3(x))
+        x = self.sigmoid(self.S4(x))
+        x = self.sigmoid(self.C5(x))  #
         x = x.view(x.size(0), -1)  # [batch, 120]
         x = self.scaled_tanh(self.F6(x))  # [batch, 84]
         x = self.output(x)  # [batch, 10]
@@ -133,9 +134,9 @@ class MyLeNetModern(nn.Module):
     def __init__(self):
         super().__init__()
         self.C1 = nn.Conv2d(1, 6, kernel_size=5)
-        self.S2 = nn.AvgPool2d(kernel_size=2, stride=2)
+        self.S2 = nn.MaxPool2d(kernel_size=2, stride=2)
         self.C3 = nn.Conv2d(6, 16, kernel_size=5)
-        self.S4 = nn.AvgPool2d(kernel_size=2, stride=2)
+        self.S4 = nn.MaxPool2d(kernel_size=2, stride=2)
         self.C5 = nn.Conv2d(16, 120, kernel_size=5)
         self.F6 = nn.Linear(120, 84)
         self.output = nn.Linear(84, 10)
@@ -269,7 +270,6 @@ class MyLeNetModern(nn.Module):
 def main(model_choice : str = 'm'):
     batch_size : int = 64
     train_loader,test_loader = load_mnist(batch_size)
-    
     
     if model_choice == 'o':
         print("原始模型:")
