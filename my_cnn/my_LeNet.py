@@ -167,109 +167,9 @@ class MyLeNetModern(nn.Module):
         
         return x
 
-
-# 现已放到train_predict文件中
-# def train_model(model: nn.Module,
-#                 train_loader: data.DataLoader,
-#                 test_loader: data.DataLoader,
-#                 lr: float,
-#                 epochs: int = 10):
-#
-#     criterion = nn.CrossEntropyLoss()
-#     optimizer = optim.Adam(model.parameters(), lr)
-#     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
-#
-#     train_losses = []
-#     test_accuracies = []
-#     best_accuracy = 0.0
-#
-#     for epoch in range(epochs):
-#         print(f"\n{'=' * 50}")
-#         print(f"Epoch {epoch + 1}/{epochs}")
-#         print(f"{'=' * 50}")
-#
-#         model.train()
-#         running_loss = 0.0
-#         correct = 0
-#         total = 0
-#
-#         train_bar = tqdm(train_loader, desc=f"训练", leave=False)
-#         for images, labels in train_bar:
-#             labels_hat = model(images)
-#             loss = criterion(labels_hat, labels)
-#
-#             optimizer.zero_grad()
-#             loss.backward()
-#             optimizer.step()
-#
-#             running_loss += loss.item()
-#             _, predicted = torch.max(labels_hat.data, 1)
-#             total += labels.size(0)
-#             correct += (predicted == labels).sum().item()
-#
-#             train_bar.set_postfix({
-#                 'loss': f'{loss.item():.4f}',
-#                 'acc': f'{100 * correct / total:.2f}%'
-#             })
-#
-#         scheduler.step()
-#
-#         avg_train_loss = running_loss / len(train_loader)
-#         train_accuracy = 100 * correct / total
-#
-#         model.eval()
-#         test_correct = 0
-#         test_total = 0
-#
-#         with torch.no_grad():
-#             for images, labels in test_loader:
-#                 y_hat = model(images)
-#                 _, predicted = torch.max(y_hat.data, 1)
-#                 test_total += labels.size(0)
-#                 test_correct += (predicted == labels).sum().item()
-#
-#         test_accuracy = 100 * test_correct / test_total
-#
-#         train_losses.append(avg_train_loss)
-#         test_accuracies.append(test_accuracy)
-#
-#         if test_accuracy > best_accuracy:
-#             best_accuracy = test_accuracy
-#             best_model_state = model.state_dict().copy()
-#             torch.save({
-#                 'epoch': epoch,
-#                 'model_state_dict': best_model_state,
-#                 'optimizer_state_dict': optimizer.state_dict(),
-#                 'loss': avg_train_loss,
-#                 'accuracy': best_accuracy,
-#             }, 'best_lenet_model.pth')
-#             print(f"✅ 保存最佳模型，准确率: {best_accuracy:.2f}%")
-#
-#         print(f"训练损失: {avg_train_loss:.4f}, 训练准确率: {train_accuracy:.2f}%")
-#         print(f"测试准确率: {test_accuracy:.2f}%")
-#
-#     print(f"\n训练完成！最佳测试准确率: {best_accuracy:.2f}%")
-#     return train_losses, test_accuracies, best_accuracy
-#
-# def test_model(model : nn.Module,
-#                test_loader : data.DataLoader):
-#     model.eval()
-#     correct = 0
-#     total = 0
-#
-#     with torch.no_grad():
-#         for img,label in test_loader:
-#             outputs = model(img)
-#             _, predicted = torch.max(outputs.data, 1)
-#             total += label.size(0)
-#             correct += (predicted == label).sum().item()
-#
-#     accuracy = 100 * correct / total
-#     return accuracy, total, correct
-
-def main(model_choice : str = 'm'):
-    batch_size : int = 64
-    train_loader,test_loader = load_mnist(batch_size)
+def main(model_choice: str = 'm'):
+    batch_size: int = 64
+    train_loader, test_loader = load_mnist(batch_size)
     
     if model_choice == 'o':
         print("原始模型:")
@@ -278,7 +178,7 @@ def main(model_choice : str = 'm'):
         print("现代模型:")
         model = MyLeNetModern()
         def init_weights(m):
-            if isinstance(m,nn.Conv2d) or isinstance(m,nn.Linear):
+            if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
                 nn.init.xavier_normal_(m.weight)
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
@@ -298,19 +198,28 @@ def main(model_choice : str = 'm'):
     
     start_time = time.time()
     train_losses, test_accuracies, best_accuracy = tp.train_model(
-        model=model,
-        train_loader=train_loader,
-        test_loader=test_loader,
-        epochs=20,
-        lr=0.001
+            model=model,
+            train_loader=train_loader,
+            test_loader=test_loader,
+            epochs=20,
+            lr=0.001
     )
     
     end_time = time.time()
     
-    final_accuracy, total, correct = tp.test_model(model, test_loader)
-    print(f"\n训练用时: {end_time - start_time:.2f}秒")
-    print(f"最终测试准确率: {final_accuracy:.2f}%")
-    print(f"正确数/总数: {correct}/{total}")
+    print("\n使用最佳模型进行测试...")
+    predictions, accuracy, total, correct, labels = tp.predict_model(
+            model=model,
+            data_loader=test_loader,
+            model_path='best_model.pth',
+            log_file='test_log.txt'
+    )
     
+    print(f"\n训练用时: {end_time - start_time:.2f}秒")
+    print(f"最终测试准确率: {accuracy:.2f}%")
+    print(f"正确数/总数: {correct}/{total}")
+
 if __name__ == '__main__':
     main('m')
+
+    
