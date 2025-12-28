@@ -1,0 +1,96 @@
+# VGG16 配置文件
+[model]
+name = 'VGG16'
+
+input_channel = 3
+num_classes = 100
+
+[l1]
+type = 'conv'
+ch = 64
+bn = true
+pool = false
+
+[l2]
+type = 'conv'
+ch = 64
+bn = true
+pool = true
+
+[l3]
+type = 'conv'
+ch = 128
+bn = true
+pool = false
+
+[l4]
+type = 'conv'
+ch = 128
+bn = true
+pool = true
+
+[l5]
+type = 'conv'
+ch = 256
+bn = true
+pool = false
+
+[l6]
+type = 'conv'
+ch = 256
+bn = true
+pool = false
+
+[l7]
+type = 'conv'
+ch = 256
+bn = true
+pool = false
+
+[l8]
+type = 'conv'
+ch = 512
+bn = true
+pool = false
+
+[l9]
+type = 'conv'
+ch = 512
+bn = true
+pool = false
+
+[l10]
+type = 'conv'
+ch = 512
+bn = true
+pool = false
+
+[l11]
+type = 'conv'
+ch = 512
+bn = true
+pool = false
+
+[l12]
+type = 'conv'
+ch = 512
+bn = true
+pool = false
+
+[l13]
+type = 'conv'
+ch = 512
+bn = true
+pool = true
+
+[l14]
+type = 'fc'
+ch = [25088,4096]
+
+[l15]
+type = 'fc'
+ch = [4096,4096]
+
+[l16]
+type = 'out'
+ch = [4096,100]

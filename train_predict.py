@@ -40,41 +40,35 @@ def train_model(
         epochs: int = 10,
         device: str = 'cuda',
         save_path: str = 'best_model.pth',
-        log_file: Optional[str] = None
+        log_file: Optional[str] = None,
+        use_amp: bool = True,  # 新增：是否使用混合精度
+        log_interval: int = 50  # 新增：日志间隔
 ) -> Tuple[List[float], List[float], float]:
-    """
-    训练模型
-    
-    参数:
-        model: 要训练的模型
-        train_loader: 训练数据加载器
-        test_loader: 测试数据加载器
-        loss_fn: 损失函数，默认为CrossEntropyLoss
-        optimizer: 优化器，默认为Adam
-        scheduler: 学习率调度器，默认为StepLR
-        lr: 学习率
-        weight_decay: 权重衰减
-        epochs: 训练轮数
-        device: 训练设备
-        save_path: 模型保存路径
-        log_file: 日志文件路径，如果为None则不记录到文件
-        
-    返回:
-        train_losses: 训练损失列表
-        test_accuracies: 测试准确率列表
-        best_accuracy: 最佳测试准确率
-    """
     
     logger = Logger(log_file)
     
-    device = torch.device(device if device == 'cuda' and torch.cuda.is_available() else 'cpu')
+    # 修正设备选择逻辑
+    device = torch.device('cuda' if torch.cuda.is_available() and device == 'cuda' else 'cpu')
     logger.log(f"使用设备: {device}")
+    
+    # 启用cudNN优化
+    if device.type == 'cuda':
+        torch.backends.cudnn.benchmark = True
+        logger.log("已启用cudNN自动优化")
     
     model = model.to(device)
     
     loss_fn = loss_fn or nn.CrossEntropyLoss()
     optimizer = optimizer or optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = scheduler or optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+    
+    # 混合精度训练
+    scaler = torch.cuda.amp.GradScaler(enabled=use_amp and device.type == 'cuda')
+    
+    # 计算模型参数
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    logger.log(f"模型参数: 总计 {total_params:,}, 可训练 {trainable_params:,}")
     
     logger.log("\n训练配置:")
     logger.log(f"  学习率: {lr}")
@@ -83,6 +77,8 @@ def train_model(
     logger.log(f"  批大小: {train_loader.batch_size}")
     logger.log(f"  训练集大小: {len(train_loader.dataset)}")
     logger.log(f"  测试集大小: {len(test_loader.dataset)}")
+    logger.log(f"  混合精度训练: {use_amp and device.type == 'cuda'}")
+    logger.log(f"  日志间隔: 每{log_interval}个batch")
     
     train_losses, test_accuracies = [], []
     best_accuracy = 0.0
@@ -94,40 +90,67 @@ def train_model(
         model.train()
         running_loss = correct = total = 0
         
-        with tqdm(train_loader, desc="训练") as pbar:
-            for images, labels in pbar:
-                images, labels = images.to(device), labels.to(device)
+        # 使用tqdm但设置更小的更新间隔
+        with tqdm(train_loader, desc="训练", mininterval=1.0) as pbar:
+            for batch_idx, (images, labels) in enumerate(pbar):
+                images, labels = images.to(device, non_blocking=True), labels.to(device, non_blocking=True)
                 
-                outputs = model(images)
-                loss = loss_fn(outputs, labels)
+                # 混合精度训练
+                with torch.cuda.amp.autocast(enabled=use_amp and device.type == 'cuda'):
+                    outputs = model(images)
+                    loss = loss_fn(outputs, labels)
                 
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
+                optimizer.zero_grad(set_to_none=True)  # 更快的梯度清零
+                
+                if use_amp and device.type == 'cuda':
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    loss.backward()
+                    optimizer.step()
                 
                 running_loss += loss.item()
-                _, predicted = torch.max(outputs.data, 1)
-                total += labels.size(0)
-                correct += (predicted == labels).sum().item()
                 
-                pbar.set_postfix({
-                    'loss': f'{loss.item():.4f}',
-                    'acc': f'{100*correct/total:.1f}%'
-                })
+                # 每log_interval个batch才计算准确率，减少开销
+                if batch_idx % log_interval == 0 or batch_idx == len(train_loader) - 1:
+                    with torch.no_grad():
+                        _, predicted = torch.max(outputs.data, 1)
+                        batch_total = labels.size(0)
+                        batch_correct = (predicted == labels).sum().item()
+                        total += batch_total
+                        correct += batch_correct
+                        
+                        current_acc = 100 * batch_correct / batch_total
+                        avg_acc = 100 * correct / total if total > 0 else 0
+                        
+                        pbar.set_postfix({
+                            'loss': f'{loss.item():.4f}',
+                            'batch_acc': f'{current_acc:.1f}%',
+                            'avg_acc': f'{avg_acc:.1f}%'
+                        })
         
-        scheduler.step()
-        
+        # 计算平均训练损失和准确率
         avg_train_loss = running_loss / len(train_loader)
-        train_accuracy = 100 * correct / total
+        train_accuracy = 100 * correct / total if total > 0 else 0
         train_losses.append(avg_train_loss)
         
+        # 学习率调整
+        if scheduler is not None:
+            scheduler.step()
+        
+        # 测试
         model.eval()
         test_correct = test_total = 0
         
         with torch.no_grad():
-            for images, labels in test_loader:
-                images, labels = images.to(device), labels.to(device)
-                outputs = model(images)
+            for images, labels in tqdm(test_loader, desc="测试", leave=False):
+                images, labels = images.to(device, non_blocking=True), labels.to(device, non_blocking=True)
+                
+                # 测试时也使用混合精度
+                with torch.cuda.amp.autocast(enabled=use_amp and device.type == 'cuda'):
+                    outputs = model(images)
+                
                 _, predicted = torch.max(outputs.data, 1)
                 test_total += labels.size(0)
                 test_correct += (predicted == labels).sum().item()
@@ -135,12 +158,14 @@ def train_model(
         test_accuracy = 100 * test_correct / test_total
         test_accuracies.append(test_accuracy)
         
+        # 保存最佳模型
         if test_accuracy > best_accuracy:
             best_accuracy = test_accuracy
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict() if scheduler else None,
                 'loss': avg_train_loss,
                 'accuracy': best_accuracy,
             }, save_path)
@@ -148,11 +173,13 @@ def train_model(
         
         logger.log(f"训练损失: {avg_train_loss:.4f}, 训练准确率: {train_accuracy:.2f}%")
         logger.log(f"测试准确率: {test_accuracy:.2f}%")
+        if scheduler:
+            current_lr = scheduler.get_last_lr()[0] if hasattr(scheduler, 'get_last_lr') else optimizer.param_groups[0]['lr']
+            logger.log(f"当前学习率: {current_lr:.6f}")
     
     logger.log(f"\n训练完成!")
     logger.log(f"最佳测试准确率: {best_accuracy:.2f}%")
     
-    model.cpu()
     return train_losses, test_accuracies, best_accuracy
 
 def predict_model(
