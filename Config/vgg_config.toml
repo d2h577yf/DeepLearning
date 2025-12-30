@@ -1,0 +1,43 @@
+# config.toml
+project_name = "vgg16"
+author = "wanghongyu"
+version = "2.0"
+
+[data]
+input_channels = 3
+num_classes = 100
+data_path = '/root/autodl-tmp/datasets/cifar-100'
+model_save = './best_model.pth'
+
+[log_path]
+train_log_save_path = './train_log.txt'
+test_log_save_path = './test_log.txt'
+
+[model]
+conv_blocks = [
+    [64, 64, "m"],
+    [128, 128, "m"],
+    [256, 256, 256, "m"],
+    [512, 512, 512, "m"],
+    [512, 512, 512, "m"],
+]
+fc_layers = [
+    [4096, "r", "d"],
+    [4096, "r"],
+    [100]
+]
+
+[optimizer]
+name = "sgd"
+lr = 0.01
+weight_decay = 0.001
+momentum = 0.8
+
+[train]
+batch_size = 128
+num_epochs = 50
+num_workers = 12
+
+[scheduler]
+step_size = 10
+gamma = 0.1

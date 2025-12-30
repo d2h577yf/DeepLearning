@@ -34,7 +34,7 @@ def train_model(
         test_loader: data.DataLoader,
         loss_fn: Optional[nn.Module],
         optimizer: Optional[optim.Optimizer],
-        scheduler: Optional[Any],
+        scheduler: Optional[Any] = None,
         epochs: int = 10,
         device: str = 'cuda',
         save_path: str = 'best_model.pth',
@@ -112,8 +112,9 @@ def train_model(
                     'loss': f'{loss.item():.4f}',
                     'acc': f'{100*correct/total:.1f}%'
                 })
-        
-        scheduler.step()
+                
+        if scheduler:
+            scheduler.step()
         
         avg_train_loss = running_loss / len(train_loader)
         train_accuracy = 100 * correct / total

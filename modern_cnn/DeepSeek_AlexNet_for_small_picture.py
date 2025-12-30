@@ -188,8 +188,6 @@ def main():
             test_loader=test_loader,
             optimizer=optimizer,
             scheduler=scheduler,
-            lr=lr,
-            weight_decay=weight_decay,
             epochs=epochs,
             device='cuda',
             save_path=model_save_path,
