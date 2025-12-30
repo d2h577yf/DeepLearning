@@ -159,7 +159,6 @@ def main():
     
     model.apply(init_weights)
     
-    # 优化器和调度器
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(
             model.parameters(),
@@ -185,14 +184,10 @@ def main():
             loss_fn=criterion,
             optimizer=optimizer,
             scheduler=scheduler,
-            lr=lr,
-            weight_decay=w_d,
             epochs=num_epochs,
             device='cuda',
             save_path='best_model.pth',
             log_file='train_log.txt',
-            use_amp=True,
-            log_interval=50
     )
     
     end_time = time.time()
