@@ -146,7 +146,7 @@ def build_fc(config: Config) -> nn.Module:
                         nn.ReLU(inplace=True)
                 )
             elif item == "d":
-                dropout_rate = 0.5
+                dropout_rate = 0.6
                 for next_item in layer:
                     if isinstance(next_item, float):
                         dropout_rate = next_item
