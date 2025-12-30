@@ -1,6 +1,3 @@
-from math import gamma
-from pprint import pprint
-
 import torch
 import torch.nn as nn
 import torchvision
@@ -179,11 +176,11 @@ class vgg16(nn.Module):
     
 def init_(m):
     if isinstance(m, nn.Conv2d):
-        nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+        nn.init.xavier_normal_(m.weight)
         if m.bias is not None:
             nn.init.constant_(m.bias, 0)
     elif isinstance(m, nn.Linear):
-        nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+        nn.init.xavier_normal_(m.weight)
         nn.init.constant_(m.bias, 0)
     elif isinstance(m, nn.BatchNorm2d):
         nn.init.constant_(m.weight, 1)
@@ -194,22 +191,17 @@ def load_cifar100(config : Config):
     data_root = config.data.data_path
     batch_size = config.train.batch_size
     num_workers = config.train.num_workers
-    
+
     transform_train = transforms.Compose([
-        transforms.Resize((227, 227)),
-        transforms.RandomHorizontalFlip(p = 0.5),
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
-        transforms.Normalize(
-                mean = [0.485, 0.456, 0.406],
-                std = [0.229, 0.224, 0.225])
+        transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)),
     ])
-    
+
     transform_test = transforms.Compose([
-        transforms.Resize((227, 227)),
         transforms.ToTensor(),
-        transforms.Normalize(
-                mean = [0.485, 0.456, 0.406],
-                std = [0.229, 0.224, 0.225])
+        transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)),
     ])
     
     train_set = torchvision.datasets.CIFAR100(
@@ -259,11 +251,10 @@ def main() ->None:
     weight_decay = config.optimizer.weight_decay
     mt = config.optimizer.momentum
     
-    optimizer = torch.optim.SGD(
+    optimizer = torch.optim.Adam(
             model.parameters(),
             lr = lr,
-            weight_decay = weight_decay,
-            momentum = mt
+            weight_decay = weight_decay
     )
     
     step_size = config.scheduler.step_size
