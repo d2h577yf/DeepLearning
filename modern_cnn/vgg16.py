@@ -142,6 +142,10 @@ def build_fc(config: Config) -> nn.Module:
         for item in layer:
             if item == "r":
                 full_connect.add_module(
+                        f"bn{layer_count}",
+                        nn.BatchNorm2d(in_features)
+                )
+                full_connect.add_module(
                         f"relu{layer_count}",
                         nn.ReLU(inplace=True)
                 )
