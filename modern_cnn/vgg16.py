@@ -17,8 +17,8 @@ class DataConfig:
 
 @dataclass
 class LogConfig:
-    train_log_save_path: str = "./train_log.txt"
-    test_log_save_path: str = "./test_log.txt"
+    train_log_save_path: str = "Result/train_log.txt"
+    test_log_save_path: str = "Result/test_log.txt"
 
 @dataclass
 class ModelConfig:
@@ -235,7 +235,6 @@ def load_cifar100(config : Config):
     )
     
     return train_loader, test_loader
-
 
 def main() ->None:
     config = Config().from_toml('../Config/vgg_config.toml')

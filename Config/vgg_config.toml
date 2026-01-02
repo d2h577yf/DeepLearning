@@ -7,11 +7,11 @@ version = "2.0"
 input_channels = 3
 num_classes = 100
 data_path = '/root/autodl-tmp/datasets/cifar-100'
-model_save = './new_best_model.pth'
+model_save = './Result/new_best_model.pth'
 
 [log_path]
-train_log_save_path = './new_train_log.txt'
-test_log_save_path = './new_test_log.txt'
+train_log_save_path = './Result/new_train_log.txt'
+test_log_save_path = './Result/new_test_log.txt'
 
 [model]
 conv_blocks = [

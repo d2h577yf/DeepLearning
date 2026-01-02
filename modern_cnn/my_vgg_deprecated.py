@@ -187,7 +187,7 @@ def main():
             epochs=num_epochs,
             device='cuda',
             save_path='best_model.pth',
-            log_file='train_log.txt',
+            log_file= 'Result/train_log.txt',
     )
     
     end_time = time.time()
@@ -198,7 +198,7 @@ def main():
             model = model,
             data_loader = test_loader,
             model_path = 'best_model.pth',
-            log_file = 'test_log.txt'
+            log_file = 'Result/test_log.txt'
     )
     
     print(f"\n训练用时: {end_time - start_time:.2f}秒")
